@@ -1,0 +1,38 @@
+# entra-mcp policy example
+# Copy to /etc/entra-mcp/policy.yaml and adjust as needed.
+# If ENTRA_MCP_POLICY_FILE is unset or the file does not exist, all tools are allowed.
+
+version: "1"
+
+rules:
+  # Allow read-only tools for all callers
+  - effect: allow
+    tools:
+      - entra.search_user
+      - entra.get_user
+      - entra.get_user_groups
+      - entra.get_transitive_user_groups
+      - entra.get_user_auth_methods_summary
+      - entra.get_user_manager
+      - entra.search_group
+      - entra.get_group
+      - entra.list_group_members
+      - entra.list_group_owners
+
+  # Allow report tools only for callers with the "analyst" role
+  - effect: allow
+    caller:
+      roles: [analyst, admin]
+    tools:
+      - entra.find_disabled_users
+      - entra.find_inactive_users
+      - entra.find_guest_users
+      - entra.find_stale_guests
+      - entra.find_password_never_expires
+      - entra.find_synced_users
+      - entra.find_privileged_role_members
+      - entra.list_subscribed_skus
+      - entra.generate_account_review_report
+
+  # Deny everything else
+  - effect: deny

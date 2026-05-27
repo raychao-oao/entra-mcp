@@ -1,0 +1,19 @@
+entra-mcp
+*.exe
+*.dll
+*.so
+*.dylib
+/dist/
+/bin/
+
+# Policy file (contains site-specific rules)
+policy.yaml
+
+# Environment
+.env
+.env.*
+!.env.example
+
+CLAUDE.md
+CLAUDE.local.md
+docs/ai_collaboration/
