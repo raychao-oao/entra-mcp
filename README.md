@@ -79,7 +79,7 @@ Add to your `.mcp.json`:
 
 | Tool | Description |
 |------|-------------|
-| `entra.search_group` | Search by display name (max 50) |
+| `entra.search_group` | Search by display name (max 50) — results include object ID |
 | `entra.get_group` | Group details by object ID |
 | `entra.list_group_members` | Direct members (max 200) |
 | `entra.list_group_owners` | Group owners |
@@ -89,16 +89,16 @@ Add to your `.mcp.json`:
 | Tool | Description |
 |------|-------------|
 | `entra.find_disabled_users` | Accounts with accountEnabled = false (max 200) |
-| `entra.find_inactive_users` | Members with no sign-in in N days (max 200) |
+| `entra.find_inactive_users` | Members with no sign-in in N days (max 200) — requires Entra ID P1/P2 |
 | `entra.find_guest_users` | External guest accounts (max 200) |
-| `entra.find_stale_guests` | Guests with no sign-in in N days (max 200) |
-| `entra.find_password_never_expires` | DisablePasswordExpiration policy accounts (max 200) |
+| `entra.find_stale_guests` | Guests with no sign-in in N days (max 200) — requires Entra ID P1/P2 |
+| `entra.find_password_never_expires` | DisablePasswordExpiration policy accounts (max 200) — client-side filter, works on Free tier |
 | `entra.find_synced_users` | On-premises AD synced accounts (max 200) |
 | `entra.find_privileged_role_members` | Members of high-privilege directory roles |
 | `entra.list_subscribed_skus` | M365 license SKUs with capacity/consumed counts |
 | `entra.generate_account_review_report` | Combined hygiene report |
 
-> **Note:** Sign-in timestamp fields (`find_inactive_users`, `find_stale_guests`) require `AuditLog.Read.All` permission and Entra ID P1/P2 licensing.
+> **Note:** Sign-in timestamp fields (`find_inactive_users`, `find_stale_guests`) require `AuditLog.Read.All` and Entra ID P1/P2. On Free tier these tools return a friendly error. `get_user` fetches sign-in data in a separate optional call — base profile always returns on Free tier.
 
 ## Build
 

@@ -148,6 +148,9 @@ func registerUserTools(s *server.MCPServer, gc *graph.Client, engine *yamlengine
 		if err != nil {
 			return toolErr(err), nil
 		}
+		if mgr == nil {
+			return toolText(fmt.Sprintf("No manager assigned to %s.", id)), nil
+		}
 		return toolText(fmt.Sprintf("Manager of %s:\n\n**%s** (%s)\nDepartment: %s | Title: %s",
 			id, mgr.DisplayName, mgr.UserPrincipalName, mgr.Department, mgr.JobTitle)), nil
 	})

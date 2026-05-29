@@ -32,7 +32,7 @@ func registerGroupTools(s *server.MCPServer, gc *graph.Client, engine *yamlengin
 		var sb strings.Builder
 		sb.WriteString(fmt.Sprintf("Found %d group(s) matching %q:\n\n", len(groups), query))
 		for _, g := range groups {
-			sb.WriteString(fmt.Sprintf("- **%s** [%s]\n", g.DisplayName, classifyGroup(g)))
+			sb.WriteString(fmt.Sprintf("- **%s** [%s] — ID: `%s`\n", g.DisplayName, classifyGroup(g), g.ID))
 			if g.Description != "" {
 				sb.WriteString(fmt.Sprintf("  Description: %s\n", g.Description))
 			}

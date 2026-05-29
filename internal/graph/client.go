@@ -144,25 +144,39 @@ func (c *Client) SearchUsers(ctx context.Context, query string, maxResults int32
 }
 
 // GetUser retrieves a full user profile by UPN or object ID.
-// Sign-in activity is included when AuditLog.Read.All is granted and the
-// tenant has Entra ID P1/P2 — fields will be empty if unavailable.
+// Sign-in activity is fetched in a separate optional call — it requires
+// AuditLog.Read.All + Entra ID P1/P2 and is silently skipped if unavailable.
 func (c *Client) GetUser(ctx context.Context, idOrUPN string) (*UserDetail, error) {
-	selectFields := []string{
+	baseFields := []string{
 		"id", "displayName", "userPrincipalName", "mail", "accountEnabled",
 		"userType", "department", "jobTitle", "onPremisesSyncEnabled",
-		"assignedLicenses", "passwordPolicies", "signInActivity",
+		"assignedLicenses", "passwordPolicies",
 	}
 
 	result, err := c.svc.Users().ByUserId(idOrUPN).Get(ctx, &users.UserItemRequestBuilderGetRequestConfiguration{
 		QueryParameters: &users.UserItemRequestBuilderGetQueryParameters{
-			Select: selectFields,
+			Select: baseFields,
 		},
 	})
 	if err != nil {
 		return nil, wrapGraphErr(err)
 	}
 
-	return userToDetail(result), nil
+	detail := userToDetail(result)
+
+	// Optional: sign-in activity requires AuditLog.Read.All + P1/P2.
+	signinResult, err := c.svc.Users().ByUserId(idOrUPN).Get(ctx, &users.UserItemRequestBuilderGetRequestConfiguration{
+		QueryParameters: &users.UserItemRequestBuilderGetQueryParameters{
+			Select: []string{"id", "signInActivity"},
+		},
+	})
+	if err == nil {
+		if sa := signinResult.GetSignInActivity(); sa != nil {
+			detail.LastSuccessfulSignIn = timeVal(sa.GetLastSuccessfulSignInDateTime())
+		}
+	}
+
+	return detail, nil
 }
 
 // GetUserGroups returns the direct group memberships of a user.
@@ -206,9 +220,13 @@ func (c *Client) GetUserAuthMethodsSummary(ctx context.Context, userID string) (
 }
 
 // GetUserManager returns the UPN and display name of the user's direct manager.
+// Returns nil, nil when no manager is assigned.
 func (c *Client) GetUserManager(ctx context.Context, userID string) (*UserSummary, error) {
 	result, err := c.svc.Users().ByUserId(userID).Manager().Get(ctx, nil)
 	if err != nil {
+		if isNotFound(err) {
+			return nil, nil
+		}
 		return nil, wrapGraphErr(err)
 	}
 	// Manager() returns a DirectoryObject; cast to User.
@@ -308,7 +326,14 @@ func (c *Client) FindInactiveUsers(ctx context.Context, days int, maxResults int
 		cutoff,
 	)
 	selectFields := []string{"id", "displayName", "userPrincipalName", "mail", "accountEnabled", "userType", "department", "jobTitle", "onPremisesSyncEnabled", "signInActivity"}
-	return c.listUsersWithSelect(ctx, filter, selectFields, maxResults)
+	result, err := c.listUsersWithSelect(ctx, filter, selectFields, maxResults)
+	if err != nil {
+		if isFilterNotSupported(err) {
+			return nil, fmt.Errorf("this feature requires Entra ID P1/P2 — the current tenant's Free tier does not support filtering by signInActivity")
+		}
+		return nil, err
+	}
+	return result, nil
 }
 
 // FindGuestUsers returns accounts with userType = Guest.
@@ -332,16 +357,46 @@ func (c *Client) FindStaleGuests(ctx context.Context, days int, maxResults int32
 		cutoff,
 	)
 	selectFields := []string{"id", "displayName", "userPrincipalName", "mail", "accountEnabled", "userType", "department", "jobTitle", "onPremisesSyncEnabled", "signInActivity"}
-	return c.listUsersWithSelect(ctx, filter, selectFields, maxResults)
+	result, err := c.listUsersWithSelect(ctx, filter, selectFields, maxResults)
+	if err != nil {
+		if isFilterNotSupported(err) {
+			return nil, fmt.Errorf("this feature requires Entra ID P1/P2 — the current tenant's Free tier does not support filtering by signInActivity")
+		}
+		return nil, err
+	}
+	return result, nil
 }
 
 // FindPasswordNeverExpires returns accounts with DisablePasswordExpiration policy.
+// Graph API does not support Any/All on passwordPolicies (it is a plain string, not
+// a collection), so we fetch enabled member accounts and filter client-side.
 func (c *Client) FindPasswordNeverExpires(ctx context.Context, maxResults int32) ([]UserSummary, error) {
 	if maxResults <= 0 || maxResults > 200 {
 		maxResults = 200
 	}
-	filter := "passwordPolicies/any(p: p eq 'DisablePasswordExpiration')"
-	return c.listUsers(ctx, filter, maxResults)
+	filter := "accountEnabled eq true and userType eq 'Member'"
+	selectFields := []string{"id", "displayName", "userPrincipalName", "mail", "accountEnabled", "userType", "department", "jobTitle", "onPremisesSyncEnabled", "passwordPolicies"}
+	top := int32(999)
+	result, err := c.svc.Users().Get(ctx, &users.UsersRequestBuilderGetRequestConfiguration{
+		QueryParameters: &users.UsersRequestBuilderGetQueryParameters{
+			Filter: &filter,
+			Select: selectFields,
+			Top:    &top,
+		},
+	})
+	if err != nil {
+		return nil, wrapGraphErr(err)
+	}
+	var out []UserSummary
+	for _, u := range result.GetValue() {
+		if strings.Contains(strVal(u.GetPasswordPolicies()), "DisablePasswordExpiration") {
+			out = append(out, userToSummary(u))
+			if int32(len(out)) >= maxResults {
+				break
+			}
+		}
+	}
+	return out, nil
 }
 
 // FindSyncedUsers returns accounts synced from on-premises AD.
@@ -564,4 +619,14 @@ func wrapGraphErr(err error) error {
 		return fmt.Errorf("Microsoft Graph API rate limit reached — please wait and retry: %w", err)
 	}
 	return err
+}
+
+func isNotFound(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "404") || strings.Contains(msg, "does not exist") || strings.Contains(msg, "not found")
+}
+
+func isFilterNotSupported(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "filter not supported") || strings.Contains(msg, "unsupported filter")
 }

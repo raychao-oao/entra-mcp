@@ -1,7 +1,7 @@
 ---
 name: entra-mcp
 description: This skill should be used when the user asks to "find a user in Entra", "look up Azure AD", "check MFA methods", "find inactive users", "find guest accounts", "list group members", "generate account review report", "check licenses", or any task involving Microsoft Entra ID (Azure AD) user and group management.
-version: 0.1.0
+version: 0.2.0
 ---
 
 # entra-mcp Skill
@@ -161,17 +161,17 @@ Steps:
 | Tool | Description | Required Permission |
 |------|-------------|---------------------|
 | `entra.search_user` | Search by name, email, or UPN (min 3 chars) | `User.Read.All` |
-| `entra.get_user` | Full user profile (status, licenses, sync state); sign-in timestamps require `AuditLog.Read.All` + Entra ID P1/P2 | `User.Read.All` (+ `AuditLog.Read.All` for sign-in data) |
+| `entra.get_user` | Full user profile (status, licenses, sync state); sign-in timestamp is fetched in a separate optional call and silently skipped if `AuditLog.Read.All` or Entra ID P1/P2 is unavailable — base profile always returns on Free tier | `User.Read.All` (+ `AuditLog.Read.All` for sign-in data) |
 | `entra.get_user_groups` | Direct group memberships | `User.Read.All`, `GroupMember.Read.All` |
 | `entra.get_transitive_user_groups` | All memberships including nested/dynamic | `User.Read.All`, `GroupMember.Read.All` |
 | `entra.get_user_auth_methods_summary` | MFA method types registered (no device details) | `UserAuthenticationMethod.Read.All` |
-| `entra.get_user_manager` | User's direct manager | `User.Read.All` |
+| `entra.get_user_manager` | User's direct manager; returns "No manager assigned" instead of an error when no manager is set | `User.Read.All` |
 
 ### Group Tools
 
 | Tool | Description | Required Permission |
 |------|-------------|---------------------|
-| `entra.search_group` | Search groups by name or description (min 3 chars) | `Group.Read.All` |
+| `entra.search_group` | Search groups by name or description (min 3 chars) — results include object ID for chaining with `get_group`, `list_group_members`, `list_group_owners` | `Group.Read.All` |
 | `entra.get_group` | Group details (type, members count, sync state) | `Group.Read.All` |
 | `entra.list_group_members` | Direct members of a group (max 200) | `GroupMember.Read.All` |
 | `entra.list_group_owners` | Owners of a group; returns empty for distribution groups, Exchange-created groups, and synced groups | `Group.Read.All` |
@@ -181,10 +181,10 @@ Steps:
 | Tool | Description | Required Permission |
 |------|-------------|---------------------|
 | `entra.find_disabled_users` | All accounts with accountEnabled = false | `User.Read.All` |
-| `entra.find_inactive_users` | Accounts with no sign-in in N days (default: 90) | `User.Read.All`, `AuditLog.Read.All` |
+| `entra.find_inactive_users` | Accounts with no sign-in in N days (default: 90); returns a friendly error on Free tier (requires Entra ID P1/P2) | `User.Read.All`, `AuditLog.Read.All` |
 | `entra.find_guest_users` | All external guest accounts | `User.Read.All` |
-| `entra.find_stale_guests` | Guests with no sign-in in N days | `User.Read.All`, `AuditLog.Read.All` |
-| `entra.find_password_never_expires` | Accounts with DisablePasswordExpiration | `User.Read.All` |
+| `entra.find_stale_guests` | Guests with no sign-in in N days; returns a friendly error on Free tier (requires Entra ID P1/P2) | `User.Read.All`, `AuditLog.Read.All` |
+| `entra.find_password_never_expires` | Accounts with DisablePasswordExpiration; uses client-side filter — works on Free tier | `User.Read.All` |
 | `entra.find_synced_users` | Accounts synced from on-prem AD | `User.Read.All` |
 | `entra.find_privileged_role_members` | Members of high-privilege directory roles | `RoleManagement.Read.Directory` |
 | `entra.list_subscribed_skus` | Available license SKUs with capacity and consumed counts | `Organization.Read.All` |
