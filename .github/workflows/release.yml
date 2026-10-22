@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build binaries
+        env:
+          VERSION: ${{ github.ref_name }}
+          CGO_ENABLED: "0"
+        run: |
+          LDFLAGS="-s -w -X main.Version=${VERSION}"
+          GOOS=linux   GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o entra-mcp-linux-amd64 .
+          GOOS=linux   GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o entra-mcp-linux-arm64 .
+          GOOS=darwin  GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o entra-mcp-darwin-amd64 .
+          GOOS=darwin  GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o entra-mcp-darwin-arm64 .
+          GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o entra-mcp-windows-amd64.exe .
+
+      - name: Generate checksums
+        run: sha256sum entra-mcp-* > SHA256SUMS
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          # Release body comes from the annotated tag message (git tag -a).
+          files: |
+            entra-mcp-linux-amd64
+            entra-mcp-linux-arm64
+            entra-mcp-darwin-amd64
+            entra-mcp-darwin-arm64
+            entra-mcp-windows-amd64.exe
+            SHA256SUMS

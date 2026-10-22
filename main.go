@@ -11,7 +11,7 @@ import (
 	"github.com/raychao-oao/mcp-policy/pkg/yamlengine"
 )
 
-var Version = "0.1.0"
+var Version = "dev" // overridden at build time via -ldflags "-X main.Version=..."
 
 func main() {
 	cfg, err := config.Load()
